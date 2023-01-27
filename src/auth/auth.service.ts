@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import { UserService } from 'src/user/user.service';
 import * as bcrypt from 'bcrypt';
 import { NewUserDTO } from 'src/user/dtos/new-user.dto';
@@ -14,14 +14,14 @@ export class AuthService {
   ) {}
 
   async hashPassword(password: string): Promise<string> {
-    return bcrypt.hash(password, 12);
+    return await bcrypt.hash(password, 12);
   }
 
   async doesPasswordMatch(
     password: string,
     hashedPassword: string,
   ): Promise<boolean> {
-    return bcrypt.compare(password, hashedPassword);
+    return await bcrypt.compare(password, hashedPassword);
   }
 
   async validateUser(
@@ -31,37 +31,55 @@ export class AuthService {
     const user = await this.userService.findByEmail(email);
     const doesUserExist = !!user;
 
-    if (!doesUserExist) return null;
+    if (!doesUserExist) {
+      throw new Error('User does not exist');
+    }
 
-    const doesPasswordMatch = this.doesPasswordMatch(password, user.password);
+    const doesPasswordMatch = await this.doesPasswordMatch(
+      password,
+      user.password,
+    );
 
-    if (!doesPasswordMatch) return null;
+    if (!doesPasswordMatch) {
+      throw new Error('password does not match');
+    }
 
     return this.userService._getUserDetails(user);
   }
 
   async register(user: Readonly<NewUserDTO>): Promise<UserDetails | any> {
     const { name, email, password } = user;
-    const existingUser = await this.userService.findByEmail(email);
+    try {
+      const existingUser = await this.userService.findByEmail(email);
 
-    if (existingUser) return 'Email already exists';
+      if (existingUser) {
+        throw new Error('User already exist, try to connect with this email');
+      }
 
-    const hashedPassword = await this.hashPassword(password);
-    const newUser = await this.userService.create(name, email, hashedPassword);
+      const hashedPassword = await this.hashPassword(password);
+      const newUser = await this.userService.create(
+        name,
+        email,
+        hashedPassword,
+      );
 
-    return this.userService._getUserDetails(newUser);
+      return this.userService._getUserDetails(newUser);
+    } catch (error) {
+      throw new HttpException(error.message, HttpStatus.BAD_REQUEST);
+    }
   }
 
   async login(
     existingUser: ExistingUserDTO,
-  ): Promise<{ token: string } | null> {
+  ): Promise<{ token: string } | Error> {
     const { email, password } = existingUser;
-    const user = await this.validateUser(email, password);
+    try {
+      const user = await this.validateUser(email, password);
+      const jwt = await this.jwtService.signAsync({ user });
 
-    if (!user) return null;
-
-    const jwt = await this.jwtService.signAsync({ user });
-
-    return { token: jwt };
+      return { token: jwt };
+    } catch (error) {
+      throw new HttpException(error.message, HttpStatus.BAD_REQUEST);
+    }
   }
 }

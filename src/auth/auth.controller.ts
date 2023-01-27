@@ -15,7 +15,7 @@ export class AuthController {
 
   @Post('login')
   @HttpCode(HttpStatus.OK)
-  login(@Body() user: ExistingUserDTO): Promise<{ token: string } | null> {
+  login(@Body() user: ExistingUserDTO): Promise<{ token: string } | Error> {
     return this.authService.login(user);
   }
 }
