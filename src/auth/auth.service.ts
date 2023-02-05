@@ -32,7 +32,8 @@ export class AuthService {
     const doesUserExist = !!user;
 
     if (!doesUserExist) {
-      throw new Error('User does not exist');
+      console.log('[login]: User does not exist');
+      return null;
     }
 
     const doesPasswordMatch = await this.doesPasswordMatch(
@@ -41,7 +42,8 @@ export class AuthService {
     );
 
     if (!doesPasswordMatch) {
-      throw new Error('password does not match');
+      console.log('[login]: password does not match');
+      return null;
     }
 
     return this.userService._getUserDetails(user);
@@ -71,15 +73,16 @@ export class AuthService {
 
   async login(
     existingUser: ExistingUserDTO,
-  ): Promise<{ token: string } | Error> {
+  ): Promise<{ token: string } | false> {
     const { email, password } = existingUser;
-    try {
-      const user = await this.validateUser(email, password);
-      const jwt = await this.jwtService.signAsync({ user });
+    const user = await this.validateUser(email, password);
 
-      return { token: jwt };
-    } catch (error) {
-      throw new HttpException(error.message, HttpStatus.BAD_REQUEST);
+    if (!user) {
+      return false;
     }
+
+    const jwt = await this.jwtService.signAsync({ user });
+
+    return { token: jwt };
   }
 }
